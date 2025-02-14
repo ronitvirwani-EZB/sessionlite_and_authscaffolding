@@ -1,0 +1,5 @@
+fastapi 
+uvicorn 
+python-memcached 
+"python-jose[cryptography]" 
+"passlib[bcrypt]"
