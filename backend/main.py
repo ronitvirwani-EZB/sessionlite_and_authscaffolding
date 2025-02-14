@@ -1,3 +1,5 @@
+# to run this main.py use : uvicorn main:app --host 0.0.0.0 --port 5000
+
 import sqlite3
 import memcache
 from fastapi import FastAPI, HTTPException, Depends, Query
