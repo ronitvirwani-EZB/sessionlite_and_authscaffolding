@@ -335,15 +335,8 @@ def chat_history(
         return {"chat_history": history}
     else:
         if not session_id:
-            raise HTTPException(status_code=400, detail="Session ID required for guest mode")
-        # for guests, check if there is any history in the DB and reactivate session if needed
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM chat_history WHERE user_id = ?", (session_id,))
-        count = cursor.fetchone()[0]
-        conn.close()
-        if count > 0 and not get_chat_session_status(session_id):
-            update_chat_session_status(session_id, True)
+            raise HTTPException(status_code=400, detail="session id required for guest mode")
+        # do not reactivate session if it's ended; simply check and return empty if ended
         if not get_chat_session_status(session_id):
             return {"chat_history": []}
         key = f"chat_{session_id}"
@@ -351,12 +344,13 @@ def chat_history(
         if not history:
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
-            cursor.execute("SELECT role, message FROM chat_history WHERE user_id = ? ORDER BY id ASC", (session_id,))
+            cursor.execute("select role, message from chat_history where user_id = ? order by id asc", (session_id,))
             rows = cursor.fetchall()
             history = [{"role": row[0], "message": row[1]} for row in rows]
             conn.close()
             mc.set(key, history, time=31536000)
         return {"chat_history": history}
+
 
 
     # here we end the chat session.
