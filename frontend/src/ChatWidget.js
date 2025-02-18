@@ -3,6 +3,25 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './ChatWidget.css';
 
+// a function to generate a fingerprint based on available browser properties
+async function generateFingerprint() {
+  // we will combine user agent, language, screen width, screen height, and color depth
+  const data = [
+    navigator.userAgent, // this property returns a string containing details about the browser and operating system
+    navigator.language, // this property returns the preferred language of the user 
+    window.screen.width, // this returns the width of the visitor's screen in pixels.
+    window.screen.height,  // this returns the height of the visitor's screen in pixels
+    window.screen.colorDepth // this indicates the number of bits used to display one pixel
+  ].join('-');
+  const encoder = new TextEncoder();
+  const dataBuffer = encoder.encode(data);
+  // we then use crypto.subtle.digest to generate a sha-256 hash
+  const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
 const ChatWidget = ({ token }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -14,19 +33,17 @@ const ChatWidget = ({ token }) => {
   useEffect(() => {
     if (token) {
       // for authenticated mode we set the JWT token in axios headers
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      axios.defaults.headers.common["authorization"] = `bearer ${token}`;
       fetchChatHistoryAuth();
     } else {
-      // for guest mode we retrieve or generate a unique session ID
-      let session = localStorage.getItem("chat_session_id");
-      if (!session) {
-        session = "session-" + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem("chat_session_id", session);
-      }
-      setSessionId(session);
-      fetchChatHistoryGuest(session);
+      // for guest more we generate a fingerprint id and use it as the session id
+      generateFingerprint().then(fp => {
+        setSessionId(fp);
+        fetchChatHistoryGuest(fp);
+      });
     }
   }, [token]);
+
 
   const fetchChatHistoryAuth = async () => {
     try {
@@ -88,6 +105,7 @@ const ChatWidget = ({ token }) => {
     setIsOpen(!isOpen);
   };
 
+
   const handleEndChat = async () => {
     try {
       if (token) {
@@ -96,28 +114,11 @@ const ChatWidget = ({ token }) => {
       } else {
         await axios.post("http://localhost:5000/chat/end", { session_id: sessionId });
         setMessages([]);
-        // remove the old session ID and generate a new one
-        // we do this because 
-        // the same guest session ID is used because it’s stored persistently in localStorage.
-        // it remains the same across different logins on the same browser unless you explicitly clear or regenerate it
-        // to avoid reusing the same guest session ID for different users, clear the localStorage value when a user logs in or out
-
-// Clearing/Regenerating the Guest Session ID ensures that
-// Each new session starts with a fresh identifier
-// Chat histories are isolated between different users or sessions
-// There’s no accidental carry-over of messages from a previous session or user
-
-// Not clearing it may lead to:
-// The same guest session ID being reused across different user sessions
-// Mixing of chat data between sessions, which can be confusing and possibly a security or privacy issue
-
-        localStorage.removeItem("chat_session_id");
-        const newSession = "session-" + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem("chat_session_id", newSession);
-        setSessionId(newSession);
+        // for guest mode, we do not clear the fingerprint; since it's generated from browser data, it remains constant
+        // if desired, we could choose to prompt for a new guest session, but fingerprint remains persistent
       }
     } catch (error) {
-      console.error("Error ending chat:", error);
+      console.error("error ending chat:", error);
     }
   };
 
